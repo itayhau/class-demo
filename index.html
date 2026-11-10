@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Code — Built for the terminal, loved by your codebase</title>
+<meta name="description" content="An agentic coding tool that lives in your terminal. It reads your codebase, edits files, runs tests and opens pull requests, while you stay in control.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout concept: a colour-blocked scroll. Ink hero with a live terminal, a coral stripe,
+   an interactive feature showcase, a pale bento of real capabilities, a coral "you hold the wheel"
+   control room, an issue-to-PR timeline, and an electric indigo finale. */
+:root{
+  --ink:#0A0A1F;
+  --ink-2:#12122E;
+  --ink-3:#1B1B42;
+  --paper:#ECEAFB;
+  --paper-2:#DDD9F6;
+  --coral:#FF6B4A;
+  --coral-d:#E5502F;
+  --lilac:#A194FF;
+  --indigo:#2A1FD6;
+  --mint:#5CF2B8;
+  --rose:#FF7A93;
+  --fg:#F2F1FF;
+  --fg-dim:rgba(242,241,255,.62);
+  --fg-faint:rgba(242,241,255,.38);
+  --line:rgba(242,241,255,.12);
+  --f-display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Hanken Grotesk","Helvetica Neue",Arial,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --gutter:clamp(18px,4vw,56px);
+  --max:1320px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  background:var(--ink);color:var(--fg);
+  font-family:var(--f-body);font-size:17px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+body::after{ /* film grain */
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:100;opacity:.07;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--coral);outline-offset:3px;border-radius:6px}
+::selection{background:var(--coral);color:var(--ink)}
+.wrap{max-width:var(--max);margin:0 auto;padding-inline:var(--gutter)}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--coral)}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;font-weight:700;letter-spacing:-.025em;word-spacing:.14em;line-height:.95}
+h2{font-size:clamp(2.4rem,6vw,5.2rem);font-variation-settings:"wdth" 90,"opsz" 96}
+p{text-wrap:pretty}
+
+/* ───── Nav ───── */
+.nav{position:fixed;inset:0 0 auto 0;z-index:50;padding:14px 0;transition:background .3s,backdrop-filter .3s,border-color .3s;border-bottom:1px solid transparent}
+.nav.stuck{background:rgba(10,10,31,.72);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);border-color:var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:20px;letter-spacing:-.02em}
+.brand svg{width:30px;height:30px}
+.nav ul{display:flex;gap:30px;list-style:none;font-size:15px;color:var(--fg-dim)}
+.nav ul a{transition:color .2s}
+.nav ul a:hover{color:var(--fg)}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:12px 20px;border-radius:999px;font-weight:600;font-size:15px;transition:transform .25s var(--ease),background .25s,color .25s,box-shadow .25s;white-space:nowrap}
+.btn-coral{background:var(--coral);color:var(--ink)}
+.btn-coral:hover{transform:translateY(-2px);box-shadow:0 10px 30px -8px var(--coral)}
+.btn-ghost{border:1px solid var(--line);color:var(--fg)}
+.btn-ghost:hover{background:rgba(255,255,255,.06)}
+@media (max-width:760px){.nav ul{display:none}}
+
+/* ───── Hero ───── */
+.hero{position:relative;padding:150px 0 80px;overflow:hidden;isolation:isolate}
+#flow{position:absolute;inset:0;width:100%;height:100%;z-index:-2;
+  -webkit-mask-image:linear-gradient(to bottom,#000 55%,transparent);mask-image:linear-gradient(to bottom,#000 55%,transparent)}
+.hero::before{content:"";position:absolute;z-index:-1;width:900px;height:900px;left:var(--mx,70%);top:var(--my,20%);transform:translate(-50%,-50%);
+  background:radial-gradient(closest-side,rgba(255,107,74,.22),transparent);pointer-events:none;transition:left .6s var(--ease),top .6s var(--ease)}
+.pill{display:inline-flex;align-items:center;gap:10px;padding:7px 14px 7px 8px;border:1px solid var(--line);border-radius:999px;font-size:13.5px;color:var(--fg-dim);background:rgba(255,255,255,.03)}
+.pill b{background:var(--coral);color:var(--ink);font-weight:600;padding:2px 9px;border-radius:999px;font-size:12px}
+.hero h1{margin-top:28px;font-size:clamp(3.4rem,11.5vw,11rem);font-weight:700;font-variation-settings:"wdth" 88,"opsz" 96;line-height:.88;letter-spacing:-.03em;word-spacing:.1em}
+.hero h1 .ln{display:block;overflow:hidden;padding-bottom:.08em}
+.hero h1 .ln>span{display:inline-block;animation:rise 1.1s var(--ease) both}
+.hero h1 .ln:nth-child(2)>span{animation-delay:.12s}
+.hero h1 .ln:nth-child(3)>span{animation-delay:.24s}
+@keyframes rise{from{transform:translateY(105%) rotate(2deg)}to{transform:none}}
+.grad{background:linear-gradient(95deg,var(--coral) 10%,#FFA27E 45%,var(--lilac) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;position:relative}
+.hero-grid{margin-top:56px;display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(28px,5vw,80px);align-items:start}
+.lede{font-size:clamp(1.1rem,1.6vw,1.35rem);color:var(--fg-dim);max-width:34em}
+.lede strong{color:var(--fg);font-weight:500}
+.cta-row{margin-top:30px;display:flex;flex-wrap:wrap;gap:12px}
+.install{margin-top:34px;display:flex;align-items:center;gap:14px;max-width:520px;border:1px solid var(--line);background:rgba(255,255,255,.04);border-radius:14px;padding:6px 6px 6px 18px;font-family:var(--f-mono);font-size:14px}
+.install code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;scrollbar-width:none;color:var(--fg)}
+.install code::-webkit-scrollbar{display:none}
+.install i{color:var(--coral);font-style:normal;margin-right:10px}
+.copy{padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.08);font-family:var(--f-body);font-size:13.5px;font-weight:600;transition:background .2s}
+.copy:hover{background:rgba(255,255,255,.16)}
+.copy.done{background:var(--mint);color:var(--ink)}
+.proof{margin-top:34px;display:flex;gap:28px;flex-wrap:wrap;color:var(--fg-faint);font-size:14px}
+.proof span b{display:block;color:var(--fg);font-family:var(--f-display);font-size:28px;letter-spacing:-.03em;font-weight:700}
+
+/* terminal */
+.term-tilt{perspective:1400px}
+.term{background:linear-gradient(180deg,#14143A,#0E0E28);border:1px solid var(--line);border-radius:18px;box-shadow:0 50px 100px -30px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.02) inset,0 0 80px -20px rgba(161,148,255,.35);overflow:hidden;font-family:var(--f-mono);font-size:13.5px;line-height:1.65;transition:transform .5s var(--ease);transform-style:preserve-3d}
+.term-bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
+.term-bar i{width:11px;height:11px;border-radius:50%;background:#3a3a66}
+.term-bar i:nth-child(1){background:#FF6B6B}.term-bar i:nth-child(2){background:#FFC857}.term-bar i:nth-child(3){background:#5CF2B8}
+.term-bar span{margin-left:10px;color:var(--fg-faint);font-size:12px}
+.term-body{padding:20px 22px 24px;min-height:360px;max-height:360px;overflow:hidden;position:relative}
+.term-body.tall{min-height:340px;max-height:none}
+.term-body::after{content:"";position:absolute;left:0;right:0;bottom:0;height:46px;background:linear-gradient(transparent,#0E0E28);pointer-events:none}
+.term-body.tall::after{display:none}
+.tl{white-space:pre-wrap;word-break:break-word;animation:lineIn .45s var(--ease) both}
+@keyframes lineIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.tl.prompt{color:var(--fg)}
+.tl.prompt::before{content:"❯ ";color:var(--coral)}
+.tl.dim{color:var(--fg-dim)}
+.tl.acc{color:var(--lilac)}
+.tl.ok{color:var(--mint)}
+.tl.err{color:var(--rose)}
+.tl.add{color:var(--mint);background:rgba(92,242,184,.08)}
+.tl.del{color:var(--rose);background:rgba(255,122,147,.08)}
+.tl.txt{color:var(--fg);margin-top:8px;font-family:var(--f-body);font-size:15px}
+.caret{display:inline-block;width:8px;height:1.1em;background:var(--coral);vertical-align:-.2em;margin-left:2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.chips{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.chip{padding:7px 14px;border-radius:999px;border:1px solid var(--line);font-size:13px;color:var(--fg-dim);transition:all .25s}
+.chip:hover{color:var(--fg);border-color:var(--fg-faint)}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--ink);border-color:var(--fg)}
+@media (max-width:960px){.hero-grid{grid-template-columns:1fr}}
+
+/* ───── Marquee ───── */
+.marquee{background:var(--coral);color:var(--ink);overflow:hidden;transform:rotate(-1.4deg);margin:-10px -20px 0;padding:18px 0;position:relative;z-index:3;box-shadow:0 20px 60px -20px rgba(255,107,74,.6)}
+.marquee-track{display:flex;width:max-content;animation:slide 38s linear infinite}
+.marquee:hover .marquee-track{animation-play-state:paused}
+.marquee span{font-family:var(--f-display);font-weight:800;font-size:clamp(1.4rem,3vw,2.4rem);letter-spacing:-.03em;font-variation-settings:"wdth" 80;padding-right:34px;white-space:nowrap;display:flex;align-items:center;gap:34px}
+.marquee span::after{content:"";width:12px;height:12px;background:var(--ink);transform:rotate(45deg);flex:none}
+@keyframes slide{to{transform:translateX(-50%)}}
+
+/* ───── Showcase ───── */
+.section{padding:clamp(90px,12vw,170px) 0}
+.sec-head{display:grid;gap:22px;max-width:900px}
+.sec-head p{color:var(--fg-dim);font-size:1.15rem;max-width:36em}
+.show{margin-top:70px;display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:clamp(24px,5vw,70px);align-items:stretch}
+.tabs{display:flex;flex-direction:column;gap:4px}
+.tab{text-align:left;padding:22px 24px 24px;border-radius:18px;position:relative;overflow:hidden;transition:background .3s;border:1px solid transparent}
+.tab h3{font-size:1.6rem;letter-spacing:-.03em;font-weight:600;color:var(--fg-faint);transition:color .3s;font-variation-settings:"wdth" 88}
+.tab p{max-height:0;opacity:0;overflow:hidden;color:var(--fg-dim);font-size:1rem;transition:max-height .5s var(--ease),opacity .4s,margin .4s}
+.tab:hover h3{color:var(--fg-dim)}
+.tab[aria-selected="true"]{background:var(--ink-2);border-color:var(--line)}
+.tab[aria-selected="true"] h3{color:var(--fg)}
+.tab[aria-selected="true"] p{max-height:140px;opacity:1;margin-top:10px}
+.tab .bar{position:absolute;left:0;bottom:0;height:3px;width:0;background:linear-gradient(90deg,var(--coral),var(--lilac))}
+.tab[aria-selected="true"] .bar{animation:fill var(--dur,8s) linear forwards}
+.show.paused .tab[aria-selected="true"] .bar{animation:none;width:100%}
+@keyframes fill{to{width:100%}}
+.show-stage{position:relative}
+.show-stage::before{content:"";position:absolute;inset:-40px -30px;background:radial-gradient(closest-side,rgba(161,148,255,.25),transparent);z-index:-1;filter:blur(30px)}
+@media (max-width:960px){.show{grid-template-columns:1fr}}
+
+/* ───── Bento ───── */
+.paper{background:var(--paper);color:var(--ink);border-radius:clamp(28px,4vw,56px) clamp(28px,4vw,56px) 0 0;margin-top:-1px;position:relative;z-index:2}
+.paper h2{color:var(--ink)}
+.paper .sec-head p{color:rgba(10,10,31,.66)}
+.paper .eyebrow{color:var(--coral-d)}
+.bento{margin-top:64px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}
+.card{grid-column:span 2;background:#fff;border-radius:28px;padding:30px;display:flex;flex-direction:column;gap:22px;position:relative;overflow:hidden;min-height:340px;transition:transform .4s var(--ease),box-shadow .4s var(--ease);box-shadow:0 1px 0 rgba(10,10,31,.04)}
+.card:hover{transform:translateY(-6px);box-shadow:0 30px 60px -28px rgba(42,31,214,.35)}
+.card.w3{grid-column:span 3}
+.card.dark{background:var(--ink);color:var(--fg)}
+.card.dark p{color:var(--fg-dim)}
+.card.accent{background:var(--indigo);color:#fff}
+.card.accent p{color:rgba(255,255,255,.75)}
+.card h3{font-size:1.75rem;letter-spacing:-.035em;font-weight:700;font-variation-settings:"wdth" 86;line-height:1}
+.card p{color:rgba(10,10,31,.66);font-size:.98rem;margin-top:10px}
+.card .viz{margin-top:auto}
+.tag{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.06em;color:var(--coral-d);margin-bottom:12px;display:block}
+.dark .tag{color:var(--coral)}.accent .tag{color:var(--mint)}
+@media (max-width:1000px){.card,.card.w3{grid-column:span 3}}
+@media (max-width:700px){.bento{grid-template-columns:1fr}.card,.card.w3{grid-column:auto}}
+
+/* viz: subagents */
+.lanes{display:grid;gap:10px;font-family:var(--f-mono);font-size:12px}
+.lane{display:grid;grid-template-columns:86px 1fr 40px;align-items:center;gap:12px;color:var(--fg-dim)}
+.lane .track{height:10px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+.lane .track i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--coral),var(--lilac));animation:work var(--t) var(--ease) infinite}
+.lane:nth-child(2) .track i{background:linear-gradient(90deg,var(--lilac),var(--mint))}
+.lane:nth-child(3) .track i{background:linear-gradient(90deg,var(--mint),#9be9ff)}
+.lane:nth-child(4) .track i{background:linear-gradient(90deg,var(--rose),var(--coral))}
+@keyframes work{0%{width:4%}60%{width:100%}85%{width:100%}100%{width:4%}}
+.lane em{font-style:normal;color:var(--mint);text-align:right}
+
+/* viz: hooks */
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:var(--f-mono);font-size:12.5px}
+.node{padding:9px 13px;border-radius:12px;background:var(--paper);border:1px solid rgba(10,10,31,.1)}
+.node.hot{background:var(--ink);color:var(--fg);border-color:var(--ink)}
+.node.fire{background:var(--coral);color:var(--ink);border-color:var(--coral);animation:pulse 3s infinite}
+.flow .arr{color:rgba(10,10,31,.35)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,107,74,.5)}50%{box-shadow:0 0 0 10px rgba(255,107,74,0)}}
+.code{background:#0E0E28;color:var(--fg);border-radius:14px;padding:16px 18px;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;overflow-x:auto;white-space:pre}
+.code .k{color:var(--lilac)}.code .s{color:var(--mint)}.code .c{color:var(--fg-faint)}.code .o{color:var(--coral)}
+
+/* viz: mcp */
+.mcp{position:relative;height:210px}
+.mcp svg{position:absolute;inset:0;width:100%;height:100%}
+.mcp line{stroke:rgba(255,255,255,.25);stroke-width:1.3;stroke-dasharray:4 5;animation:dash 1.4s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-18}}
+.mn{position:absolute;transform:translate(-50%,-50%);padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);font-size:12px;font-family:var(--f-mono);color:#fff;white-space:nowrap;animation:bob 5s ease-in-out infinite;animation-delay:var(--d,0s)}
+.mn.core{background:var(--coral);color:var(--ink);border-color:var(--coral);font-weight:700;padding:10px 16px;animation:none}
+@keyframes bob{50%{transform:translate(-50%,-62%)}}
+
+/* viz: slash list */
+.cmds{display:grid;gap:8px;font-family:var(--f-mono);font-size:13px}
+.cmd{display:flex;justify-content:space-between;gap:10px;padding:10px 14px;border-radius:12px;background:var(--paper);border:1px solid transparent;transition:all .25s;cursor:default}
+.cmd:hover{background:var(--ink);color:var(--fg);transform:translateX(6px)}
+.cmd b{color:var(--coral-d);font-weight:700}.cmd:hover b{color:var(--coral)}
+.cmd span{color:rgba(10,10,31,.5);font-family:var(--f-body);font-size:12.5px;text-align:right}
+.cmd:hover span{color:var(--fg-dim)}
+
+/* viz: checkpoint */
+.rew{display:grid;gap:18px}
+.rew-label{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:12.5px;color:rgba(10,10,31,.6);gap:10px}
+.rew-label b{color:var(--ink)}
+.rew input{width:100%;appearance:none;-webkit-appearance:none;height:8px;border-radius:99px;background:linear-gradient(90deg,var(--coral) var(--p,100%),var(--paper-2) var(--p,100%));outline-offset:8px}
+.rew input::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--ink);border:4px solid var(--coral);cursor:grab;box-shadow:0 4px 12px rgba(10,10,31,.3)}
+.rew input::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--ink);border:4px solid var(--coral);cursor:grab}
+.files{display:flex;flex-wrap:wrap;gap:8px;min-height:84px;align-content:flex-start}
+.file{font-family:var(--f-mono);font-size:12px;padding:7px 11px;border-radius:10px;background:var(--paper);transition:all .35s var(--ease)}
+.file.off{opacity:.25;text-decoration:line-through;transform:scale(.94)}
+.file.bad{background:rgba(255,107,74,.18);color:var(--coral-d)}
+
+/* ───── Surfaces ───── */
+.surfaces{margin-top:60px;border-top:1px solid var(--line)}
+.srf{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 40px;align-items:center;gap:20px;padding:26px 8px;border-bottom:1px solid var(--line);position:relative;transition:padding .4s var(--ease),color .3s;isolation:isolate}
+.srf::before{content:"";position:absolute;inset:0;background:var(--coral);transform:scaleY(0);transform-origin:bottom;transition:transform .45s var(--ease);z-index:-1}
+.srf:hover::before,.srf:focus-visible::before{transform:scaleY(1)}
+.srf:hover,.srf:focus-visible{padding-inline:28px;color:var(--ink)}
+.srf strong{font-family:var(--f-display);font-size:clamp(2rem,5.5vw,4.4rem);letter-spacing:-.045em;font-weight:700;line-height:1;font-variation-settings:"wdth" 80}
+.srf span{color:var(--fg-dim);font-size:1rem;transition:color .3s}
+.srf:hover span{color:rgba(10,10,31,.75)}
+.srf svg{width:32px;height:32px;transition:transform .4s var(--ease)}
+.srf:hover svg{transform:rotate(45deg)}
+@media (max-width:760px){.srf{grid-template-columns:1fr 32px}.srf span{grid-column:1;grid-row:2}.srf svg{grid-row:1;grid-column:2}}
+
+/* ───── Control room ───── */
+.coral-block{background:var(--coral);color:var(--ink);position:relative;overflow:hidden}
+.coral-block .eyebrow{color:var(--ink);opacity:.7}
+.coral-block h2{color:var(--ink);font-size:clamp(3rem,9vw,8rem);line-height:.85}
+.control{margin-top:60px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,5vw,80px);align-items:center}
+.seg{display:inline-flex;padding:6px;border-radius:999px;background:rgba(10,10,31,.12);gap:4px;flex-wrap:wrap}
+.seg button{padding:11px 20px;border-radius:999px;font-weight:600;font-size:15px;transition:all .3s var(--ease)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--fg)}
+.mode-desc{margin-top:26px;font-family:var(--f-display);font-size:clamp(1.5rem,3vw,2.3rem);line-height:1.08;letter-spacing:-.03em;font-weight:600;min-height:3.4em;font-variation-settings:"wdth" 88}
+.hint{margin-top:18px;display:flex;align-items:center;gap:10px;font-size:14px;opacity:.75}
+kbd{font-family:var(--f-mono);font-size:12px;padding:3px 8px;border-radius:7px;background:rgba(10,10,31,.14);border:1px solid rgba(10,10,31,.2)}
+.perm{background:var(--ink);color:var(--fg);border-radius:22px;padding:26px;font-family:var(--f-mono);font-size:13.5px;box-shadow:0 40px 80px -30px rgba(10,10,31,.7);min-height:300px}
+.perm .st{display:flex;justify-content:space-between;color:var(--fg-faint);font-size:12px;margin-bottom:18px;gap:10px}
+.perm .st b{color:var(--coral);font-weight:500}
+.ask{border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px;background:rgba(255,255,255,.03);animation:lineIn .5s var(--ease) both}
+.ask .q{color:var(--fg);margin-bottom:12px}
+.ask .opts{display:flex;gap:8px;flex-wrap:wrap}
+.ask .opts span{padding:6px 12px;border-radius:8px;background:rgba(255,255,255,.08);font-size:12px;color:var(--fg-dim)}
+.ask .opts span.on{background:var(--mint);color:var(--ink);font-weight:700}
+@media (max-width:960px){.control{grid-template-columns:1fr}}
+
+/* ───── Timeline ───── */
+.tline{margin-top:80px;position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.tline::before{content:"";position:absolute;left:0;right:0;top:19px;height:2px;background:var(--line)}
+.tline::after{content:"";position:absolute;top:15px;left:0;width:10px;height:10px;border-radius:50%;background:var(--coral);box-shadow:0 0 24px 6px rgba(255,107,74,.7);animation:travel 7s var(--ease) infinite}
+@keyframes travel{0%{left:0}85%,100%{left:calc(100% - 10px)}}
+.step{padding-top:56px;position:relative}
+.step::before{content:"";position:absolute;top:10px;left:0;width:20px;height:20px;border-radius:50%;background:var(--ink);border:2px solid var(--fg-faint)}
+.step:last-child::before{border-color:var(--mint);background:var(--mint)}
+.step small{font-family:var(--f-mono);font-size:12px;color:var(--coral);letter-spacing:.06em}
+.step h3{font-size:1.5rem;margin:8px 0;font-weight:600;letter-spacing:-.03em;font-variation-settings:"wdth" 88}
+.step p{color:var(--fg-dim);font-size:.95rem}
+@media (max-width:860px){.tline{grid-template-columns:1fr;gap:0}.tline::before{left:9px;right:auto;top:0;bottom:0;width:2px;height:auto}.tline::after{display:none}.step{padding:0 0 34px 44px}.step::before{top:2px}}
+
+/* ───── Finale ───── */
+.finale{background:var(--indigo);position:relative;overflow:hidden;text-align:center;padding:clamp(100px,14vw,200px) 0 60px;border-radius:clamp(28px,4vw,56px) clamp(28px,4vw,56px) 0 0}
+.finale::before,.finale::after{content:"";position:absolute;border-radius:50%;filter:blur(70px);z-index:0}
+.finale::before{width:520px;height:520px;background:var(--coral);left:-140px;top:-100px;opacity:.55}
+.finale::after{width:560px;height:560px;background:var(--lilac);right:-160px;bottom:-60px;opacity:.5}
+.finale>*{position:relative;z-index:1}
+.finale h2{font-size:clamp(3.2rem,10.5vw,10rem);line-height:.85;font-weight:700;font-variation-settings:"wdth" 88,"opsz" 96;letter-spacing:-.03em;word-spacing:.1em}
+.finale p{margin:26px auto 0;max-width:30em;font-size:1.2rem;color:rgba(255,255,255,.8)}
+.finale .install{margin:40px auto 0;background:rgba(10,10,31,.55);border-color:rgba(255,255,255,.2);backdrop-filter:blur(10px);text-align:left}
+.finale .cta-row{justify-content:center}
+footer{margin-top:110px;padding-top:28px;border-top:1px solid rgba(255,255,255,.2);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:13.5px;color:rgba(255,255,255,.7);text-align:left}
+footer nav{display:flex;gap:22px;flex-wrap:wrap}
+footer a:hover{color:#fff}
+
+/* ───── Reveal ───── */
+.js .rv{opacity:0;transform:translateY(34px);transition:opacity .9s var(--ease),transform .9s var(--ease);transition-delay:var(--d,0s)}
+.js .rv.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+  .js .rv{opacity:1;transform:none}
+  .marquee-track{animation:none}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a href="#top" class="brand" aria-label="Claude Code home">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#FF6B4A"/><path d="M9.5 10.5 16 16l-6.5 5.5" stroke="#0A0A1F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="18" y="20" width="6" height="2.8" rx="1.4" fill="#0A0A1F"/></svg>
+      Claude Code
+    </a>
+    <ul>
+      <li><a href="#showcase">What it does</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#surfaces">Where it runs</a></li>
+      <li><a href="#control">Control</a></li>
+    </ul>
+    <a href="#install" class="btn btn-coral">Get started</a>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <canvas id="flow" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <span class="pill"><b>Agentic</b> An engineer that lives in your terminal</span>
+    <h1 aria-label="Code at the speed of intent.">
+      <span class="ln"><span>Code at</span></span>
+      <span class="ln"><span>the speed of</span></span>
+      <span class="ln"><span class="grad">intent.</span></span>
+    </h1>
+
+    <div class="hero-grid">
+      <div>
+        <p class="lede">Describe what you want in plain English. Claude Code <strong>reads your codebase, edits the files, runs your tests</strong> and opens the pull request. You review every step, and you can stop it at any one.</p>
+        <div class="cta-row">
+          <a href="#install" class="btn btn-coral">Start building
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          <a href="#showcase" class="btn btn-ghost">See it work</a>
+        </div>
+        <div class="install" id="install-hero">
+          <code><i>$</i>npm install -g @anthropic-ai/claude-code</code>
+          <button class="copy" data-copy="npm install -g @anthropic-ai/claude-code">Copy</button>
+        </div>
+        <div class="proof">
+          <span><b>0</b>context switches</span>
+          <span><b>1</b>command to start</span>
+          <span><b>100%</b>your call to merge</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="term-tilt" id="tilt">
+          <div class="term" id="heroTerm" role="img" aria-label="An animated terminal session where Claude Code fixes failing tests">
+            <div class="term-bar"><i></i><i></i><i></i><span id="termTitle">~/acme-api — claude</span></div>
+            <div class="term-body" id="heroBody"></div>
+          </div>
+        </div>
+        <div class="chips" id="heroChips" role="group" aria-label="Choose a demo session">
+          <button class="chip" aria-pressed="true" data-i="0">Fix failing tests</button>
+          <button class="chip" aria-pressed="false" data-i="1">Add a feature</button>
+          <button class="chip" aria-pressed="false" data-i="2">Explain a bug</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee" aria-hidden="true">
+  <div class="marquee-track" id="mq"></div>
+</div>
+
+<!-- SHOWCASE -->
+<section class="section" id="showcase">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">What it does</span>
+      <h2>Not autocomplete. A teammate with a shell.</h2>
+      <p>Claude Code works the way you do: it explores, makes a change, runs the program, reads what broke and tries again. Four things it does all day.</p>
+    </div>
+
+    <div class="show rv" id="show">
+      <div class="tabs" role="tablist" aria-label="Capabilities" id="tabs">
+        <button class="tab" role="tab" aria-selected="true" data-i="0">
+          <h3>Understands your whole repo</h3>
+          <p>Ask where something lives or how it works. It searches, reads the files that matter and answers with file names and line numbers. No copy-pasting context into a chat box.</p>
+          <span class="bar"></span>
+        </button>
+        <button class="tab" role="tab" aria-selected="false" data-i="1">
+          <h3>Edits across many files</h3>
+          <p>Renames, migrations and refactors touch dozens of files. It plans the change, applies the edits together and shows you a diff you can accept or reject.</p>
+          <span class="bar"></span>
+        </button>
+        <button class="tab" role="tab" aria-selected="false" data-i="2">
+          <h3>Runs it. Reads the failure. Fixes it.</h3>
+          <p>It executes your test suite, linter and build, reads the real output and loops until things are green. Failures become input, not your problem.</p>
+          <span class="bar"></span>
+        </button>
+        <button class="tab" role="tab" aria-selected="false" data-i="3">
+          <h3>Handles the git chores</h3>
+          <p>Commit messages that match your history, branches, rebases, conflict resolution and a pull request with a real description. Through plain git and the gh CLI.</p>
+          <span class="bar"></span>
+        </button>
+      </div>
+      <div class="show-stage">
+        <div class="term" role="tabpanel" aria-live="polite">
+          <div class="term-bar"><i></i><i></i><i></i><span id="showTitle">~/acme-api — claude</span></div>
+          <div class="term-body tall" id="showBody"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BENTO -->
+<section class="paper section" id="features">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">Features</span>
+      <h2>Power tools for people who ship.</h2>
+      <p>The agent is the start. The rest is how you shape it to your team, your stack and your standards.</p>
+    </div>
+
+    <div class="bento">
+      <!-- subagents -->
+      <article class="card dark w3 rv">
+        <div>
+          <span class="tag">SUBAGENTS</span>
+          <h3>Parallel work, separate context.</h3>
+          <p>Hand off research, review or test-writing to specialist subagents. Each runs in its own window, so your main session stays sharp.</p>
+        </div>
+        <div class="viz lanes" aria-label="Four subagents working in parallel">
+          <div class="lane" style="--t:5.5s"><span>explore</span><div class="track"><i></i></div><em>done</em></div>
+          <div class="lane" style="--t:7s"><span>test-writer</span><div class="track"><i></i></div><em>done</em></div>
+          <div class="lane" style="--t:4.5s"><span>reviewer</span><div class="track"><i></i></div><em>done</em></div>
+          <div class="lane" style="--t:8.5s"><span>docs</span><div class="track"><i></i></div><em>done</em></div>
+        </div>
+      </article>
+
+      <!-- hooks -->
+      <article class="card w3 rv" style="--d:.08s">
+        <div>
+          <span class="tag">HOOKS</span>
+          <h3>Rules that always run.</h3>
+          <p>Shell commands that fire on lifecycle events. Format after every edit, block a dangerous command, ping your team when a task ends. Deterministic, not a polite suggestion.</p>
+        </div>
+        <div class="viz">
+          <div class="flow" style="margin-bottom:14px">
+            <span class="node">PreToolUse</span><span class="arr">→</span>
+            <span class="node hot">Edit(src/api.ts)</span><span class="arr">→</span>
+            <span class="node">PostToolUse</span><span class="arr">→</span>
+            <span class="node fire">prettier --write</span>
+          </div>
+<div class="code"><span class="k">"hooks"</span>: { <span class="k">"PostToolUse"</span>: [{
+  <span class="k">"matcher"</span>: <span class="s">"Edit|Write"</span>,
+  <span class="k">"hooks"</span>: [{ <span class="k">"type"</span>: <span class="s">"command"</span>, <span class="k">"command"</span>: <span class="s">"npx prettier --write ."</span> }]
+}]}</div>
+        </div>
+      </article>
+
+      <!-- MCP -->
+      <article class="card accent rv">
+        <div>
+          <span class="tag">MCP</span>
+          <h3>Plug into everything.</h3>
+          <p>Connect issue trackers, databases, error monitors and design files through the Model Context Protocol.</p>
+        </div>
+        <div class="viz mcp" aria-label="Claude connected to GitHub, Postgres, Sentry, Figma and Slack">
+          <svg viewBox="0 0 300 210" preserveAspectRatio="none" aria-hidden="true">
+            <line x1="150" y1="105" x2="48" y2="38"/><line x1="150" y1="105" x2="252" y2="38"/>
+            <line x1="150" y1="105" x2="40" y2="150"/><line x1="150" y1="105" x2="262" y2="150"/>
+            <line x1="150" y1="105" x2="150" y2="190"/>
+          </svg>
+          <span class="mn core" style="left:50%;top:50%">Claude</span>
+          <span class="mn" style="left:16%;top:18%;--d:0s">GitHub</span>
+          <span class="mn" style="left:84%;top:18%;--d:.8s">Sentry</span>
+          <span class="mn" style="left:13%;top:71%;--d:1.6s">Postgres</span>
+          <span class="mn" style="left:87%;top:71%;--d:2.4s">Figma</span>
+          <span class="mn" style="left:50%;top:90%;--d:3.2s">Slack</span>
+        </div>
+      </article>
+
+      <!-- slash + skills -->
+      <article class="card rv" style="--d:.08s">
+        <div>
+          <span class="tag">SLASH COMMANDS &amp; SKILLS</span>
+          <h3>Your workflows, one keystroke.</h3>
+          <p>Use the built-ins, or save your own prompts and skills so the whole team shares them.</p>
+        </div>
+        <div class="viz cmds">
+          <div class="cmd"><b>/init</b><span>Write a CLAUDE.md for this repo</span></div>
+          <div class="cmd"><b>/compact</b><span>Summarize and free up context</span></div>
+          <div class="cmd"><b>/review</b><span>Review the open pull request</span></div>
+          <div class="cmd"><b>/loop 5m</b><span>Re-run a task on a timer</span></div>
+        </div>
+      </article>
+
+      <!-- memory -->
+      <article class="card dark rv" style="--d:.16s">
+        <div>
+          <span class="tag">CLAUDE.md</span>
+          <h3>It remembers how you work.</h3>
+          <p>Drop a markdown file in your repo. Conventions, commands and gotchas load into every session.</p>
+        </div>
+        <div class="viz code"><span class="c"># CLAUDE.md</span>
+<span class="o">##</span> Commands
+- test: <span class="s">pnpm test --run</span>
+- lint: <span class="s">pnpm lint --fix</span>
+<span class="o">##</span> Style
+- Prefer named exports
+- No default <span class="s">any</span>, ever</div>
+      </article>
+
+      <!-- checkpoints -->
+      <article class="card w3 rv">
+        <div>
+          <span class="tag">CHECKPOINTS</span>
+          <h3>Undo is a slider.</h3>
+          <p>Every edit is checkpointed. Went down the wrong path? Rewind the code and the conversation to any earlier point. Drag it.</p>
+        </div>
+        <div class="viz rew">
+          <div class="rew-label"><span>Rewind to <b id="rewName">checkpoint 4</b></span><span id="rewNote">current state</span></div>
+          <input type="range" id="rew" min="0" max="4" step="1" value="4" aria-label="Rewind to checkpoint">
+          <div class="files" id="rewFiles"></div>
+        </div>
+      </article>
+
+      <!-- headless -->
+      <article class="card dark w3 rv" style="--d:.08s">
+        <div>
+          <span class="tag">HEADLESS &amp; SDK</span>
+          <h3>Same agent. No terminal.</h3>
+          <p>Run it from CI, a cron job or your own app. Pipe in a log, get structured JSON back. Build your own agents on the same engine with the Agent SDK.</p>
+        </div>
+        <div class="viz code"><span class="c"># in your GitHub Actions workflow</span>
+<span class="o">$</span> git diff main | claude -p <span class="s">"Review this diff for bugs"</span> \
+    --output-format json
+<span class="c"># → { "result": "2 issues found…", "cost_usd": 0.04 }</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- SURFACES -->
+<section class="section" id="surfaces">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">Where it runs</span>
+      <h2>Meet your code where it already lives.</h2>
+      <p>Start in the terminal and keep the same session in your editor, on GitHub or on the web.</p>
+    </div>
+    <div class="surfaces rv">
+      <a class="srf" href="#install"><strong>Terminal</strong><span>The home turf. Works over SSH, in tmux, in any shell.</span><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M9 23 23 9M11 9h12v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <a class="srf" href="#install"><strong>VS Code</strong><span>Inline diffs, selection context and one-click accept.</span><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M9 23 23 9M11 9h12v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <a class="srf" href="#install"><strong>JetBrains</strong><span>IntelliJ, PyCharm, WebStorm and the rest of the family.</span><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M9 23 23 9M11 9h12v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <a class="srf" href="#install"><strong>GitHub</strong><span>Mention it on an issue or PR and it does the work in Actions.</span><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M9 23 23 9M11 9h12v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <a class="srf" href="#install"><strong>Web &amp; desktop</strong><span>Kick off long tasks from anywhere and pick them up later.</span><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M9 23 23 9M11 9h12v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </div>
+  </div>
+</section>
+
+<!-- CONTROL ROOM -->
+<section class="section coral-block" id="control">
+  <div class="wrap">
+    <span class="eyebrow">Permissions</span>
+    <h2 style="margin-top:22px">You hold the wheel.</h2>
+    <div class="control">
+      <div>
+        <div class="seg" role="group" aria-label="Permission mode" id="seg">
+          <button aria-pressed="true" data-m="0">Ask first</button>
+          <button aria-pressed="false" data-m="1">Auto-edit</button>
+          <button aria-pressed="false" data-m="2">Plan only</button>
+        </div>
+        <p class="mode-desc" id="modeDesc" aria-live="polite"></p>
+        <div class="hint">Cycle modes mid-session with <kbd>Shift</kbd> + <kbd>Tab</kbd></div>
+      </div>
+      <div class="perm" id="perm" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<!-- TIMELINE -->
+<section class="section" id="flowsec">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">A real workflow</span>
+      <h2>From issue to pull request, while you get coffee.</h2>
+    </div>
+    <div class="tline rv">
+      <div class="step"><small>STEP 1</small><h3>Read the issue</h3><p>Point it at the ticket. It pulls the description and linked context through MCP.</p></div>
+      <div class="step"><small>STEP 2</small><h3>Plan the change</h3><p>In plan mode it explores read-only and proposes an approach for you to approve.</p></div>
+      <div class="step"><small>STEP 3</small><h3>Edit the files</h3><p>Changes land across the codebase, with a checkpoint at every step.</p></div>
+      <div class="step"><small>STEP 4</small><h3>Run the checks</h3><p>Tests, types and lint run for real. It iterates until the output is clean.</p></div>
+      <div class="step"><small>STEP 5</small><h3>Open the PR</h3><p>A branch, a commit and a pull request with a description a human can review.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- FINALE -->
+<section class="finale" id="install">
+  <div class="wrap">
+    <span class="eyebrow" style="color:var(--mint)">Ready when you are</span>
+    <h2 style="margin-top:22px">Open your terminal.<br>Say hello.</h2>
+    <p>Install it once, run <code style="font-family:var(--f-mono);background:rgba(10,10,31,.4);padding:2px 8px;border-radius:7px">claude</code> in any project, and ask for something real.</p>
+    <div class="install">
+      <code><i>$</i>npm install -g @anthropic-ai/claude-code</code>
+      <button class="copy" data-copy="npm install -g @anthropic-ai/claude-code">Copy</button>
+    </div>
+    <div class="cta-row" style="margin-top:26px">
+      <a href="https://docs.claude.com/en/docs/claude-code/overview" class="btn btn-coral" target="_blank" rel="noopener">Read the docs</a>
+      <a href="#top" class="btn btn-ghost" style="border-color:rgba(255,255,255,.3)">Back to top ↑</a>
+    </div>
+    <footer>
+      <span>A concept landing page for Claude Code. Unofficial, and not affiliated with Anthropic.</span>
+      <nav><a href="#showcase">What it does</a><a href="#features">Features</a><a href="#control">Control</a></nav>
+    </footer>
+  </div>
+</section>
+
+</main>
+
+<script>
+document.documentElement.classList.add('js');
+(function(){
+  'use strict';
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var $ = function(s,r){return (r||document).querySelector(s)};
+  var $$ = function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
+  var sleep = function(ms){return new Promise(function(r){setTimeout(r,ms)})};
+
+  /* nav state */
+  var nav = $('#nav');
+  var onScroll = function(){nav.classList.toggle('stuck',window.scrollY>40)};
+  window.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+
+  /* reveal on scroll (elements already in view are shown immediately) */
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
+    },{threshold:.12,rootMargin:'0px 0px -6% 0px'});
+    $$('.rv').forEach(function(el){io.observe(el)});
+  } else { $$('.rv').forEach(function(el){el.classList.add('in')}); }
+
+  /* copy buttons */
+  $$('.copy').forEach(function(b){
+    b.addEventListener('click',function(){
+      var t = b.getAttribute('data-copy');
+      var ok = function(){ b.textContent='Copied'; b.classList.add('done'); setTimeout(function(){b.textContent='Copy';b.classList.remove('done')},1800) };
+      var fallback = function(){
+        var ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0';
+        document.body.appendChild(ta); ta.select();
+        try{document.execCommand('copy'); ok();}catch(e){ b.textContent='Press Ctrl+C'; }
+        document.body.removeChild(ta);
+      };
+      if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(ok,fallback); } else fallback();
+    });
+  });
+
+  /* marquee */
+  var words = ['Fix the bug','Write the tests','Refactor the module','Explain this code','Migrate the schema','Review the PR','Resolve the conflict','Update the docs','Ship the feature','Trace the regression'];
+  var mq = $('#mq'); var html = '';
+  for(var k=0;k<2;k++){ words.forEach(function(w){ html += '<span>'+w+'</span>'; }); }
+  mq.innerHTML = html;
+
+  /* ───── terminal scenarios ───── */
+  var S = [
+    { title:'~/acme-api — claude', cmd:'fix the failing auth tests', steps:[
+      ['dim','● Read(src/auth/session.ts)'],['dim','● Read(tests/auth.test.ts)'],
+      ['dim','● Bash(npm test)'],['err','  ✗ 2 failed · refresh token rejected one second early'],
+      ['acc','● Update(src/auth/session.ts)'],['del','  - if (now > token.exp) return null'],['add','  + if (now >= token.exp) return null'],
+      ['dim','● Bash(npm test)'],['ok','  ✓ 48 passed in 3.2s'],
+      ['txt','Fixed. The expiry check used > instead of >=, so a token stayed valid for an extra second. I left the other tests untouched.']
+    ]},
+    { title:'~/shop-web — claude', cmd:'add a dark mode toggle to settings', steps:[
+      ['dim','● Search(pattern: "ThemeProvider")'],['dim','  ⎿ Found 3 files'],
+      ['dim','● Read(src/components/Settings.tsx)'],
+      ['acc','● Write(src/hooks/useTheme.ts)'],['add','  + export function useTheme() { /* persists to localStorage */ }'],
+      ['acc','● Update(src/components/Settings.tsx)'],['add','  + <Toggle label="Dark mode" onChange={toggle} />'],
+      ['dim','● Bash(npm run typecheck && npm test)'],['ok','  ✓ types clean · 112 tests passed'],
+      ['txt','Done. The toggle respects the system setting by default and remembers the choice. Want me to open a PR?']
+    ]},
+    { title:'~/billing — claude', cmd:'why do invoices sometimes double charge?', steps:[
+      ['dim','● Search(pattern: "createCharge")'],['dim','  ⎿ Found 6 matches in 4 files'],
+      ['dim','● Read(src/payments/retry.ts)'],['dim','● Read(src/payments/webhook.ts)'],
+      ['err','  ! retry.ts:41 retries without an idempotency key'],
+      ['txt','Found it. When the provider times out, retry.ts:41 sends a second charge request with no idempotency key, so a slow success becomes a duplicate. I can add a key derived from the invoice ID. Should I?']
+    ]}
+  ];
+
+  function mk(type,text,delay){
+    var d=document.createElement('div'); d.className='tl '+type; d.textContent=text;
+    if(delay) d.style.animationDelay=delay+'s'; return d;
+  }
+  function renderStatic(el,sc,stagger){
+    el.innerHTML='';
+    el.appendChild(mk('prompt',sc.cmd,0));
+    sc.steps.forEach(function(s,i){ el.appendChild(mk(s[0],s[1],stagger?(i+1)*stagger:0)); });
+  }
+
+  /* hero player */
+  var heroBody = $('#heroBody'), heroTitle=$('#termTitle'), chips=$$('#heroChips .chip');
+  var token = 0, current = 0;
+  async function play(i){
+    var my = ++token; current = i;
+    chips.forEach(function(c,n){c.setAttribute('aria-pressed',String(n===i))});
+    var sc = S[i]; heroTitle.textContent = sc.title;
+    if(reduce){ renderStatic(heroBody,sc,0); return; }
+    heroBody.innerHTML='';
+    var p = mk('prompt','',0); var caret=document.createElement('span'); caret.className='caret';
+    var txt = document.createTextNode(''); p.appendChild(txt); p.appendChild(caret); heroBody.appendChild(p);
+    for(var c=0;c<sc.cmd.length;c++){ if(my!==token) return; txt.nodeValue += sc.cmd[c]; await sleep(28+Math.random()*40); }
+    await sleep(400);
+    caret.remove();
+    for(var n=0;n<sc.steps.length;n++){
+      if(my!==token) return;
+      var st=sc.steps[n]; heroBody.appendChild(mk(st[0],st[1],0));
+      heroBody.scrollTop = heroBody.scrollHeight;
+      await sleep(st[0]==='txt'?300:(st[0]==='add'||st[0]==='del'?240:620));
+    }
+    await sleep(5200);
+    if(my===token) play((i+1)%S.length);
+  }
+  chips.forEach(function(c){ c.addEventListener('click',function(){ play(+c.getAttribute('data-i')); }); });
+  play(0);
+
+  /* hero parallax tilt + cursor glow */
+  var hero=$('#hero'), tilt=$('#tilt'), term=$('#heroTerm');
+  if(!reduce && window.matchMedia('(pointer:fine)').matches){
+    hero.addEventListener('mousemove',function(e){
+      var r=hero.getBoundingClientRect();
+      hero.style.setProperty('--mx',(e.clientX-r.left)+'px'); hero.style.setProperty('--my',(e.clientY-r.top)+'px');
+      var t=tilt.getBoundingClientRect();
+      var x=(e.clientX-(t.left+t.width/2))/window.innerWidth, y=(e.clientY-(t.top+t.height/2))/window.innerHeight;
+      term.style.transform='rotateY('+(x*8)+'deg) rotateX('+(-y*8)+'deg)';
+    });
+    hero.addEventListener('mouseleave',function(){ term.style.transform=''; });
+  }
+
+  /* ───── flow-field canvas ───── */
+  (function(){
+    var cv=$('#flow'), cx=cv.getContext('2d'), W,H,dpr, parts=[], running=false, t=0, raf;
+    function size(){
+      dpr=Math.min(window.devicePixelRatio||1,2);
+      W=cv.clientWidth; H=cv.clientHeight; cv.width=W*dpr; cv.height=H*dpr; cx.setTransform(dpr,0,0,dpr,0,0);
+      var n=Math.round(Math.min(900,W*H/2200)); parts=[];
+      for(var i=0;i<n;i++) parts.push({x:Math.random()*W,y:Math.random()*H,a:Math.random()<.5?0:1,l:Math.random()*200});
+    }
+    function ang(x,y){ return (Math.sin(x*.0028+t*.35)+Math.cos(y*.0034-t*.27)+Math.sin((x+y)*.0016+t*.2))*1.6; }
+    function frame(){
+      cx.globalCompositeOperation='destination-out'; cx.fillStyle='rgba(0,0,0,.045)'; cx.fillRect(0,0,W,H);
+      cx.globalCompositeOperation='lighter'; cx.lineWidth=1.1;
+      for(var i=0;i<parts.length;i++){
+        var p=parts[i], a=ang(p.x,p.y), nx=p.x+Math.cos(a)*1.7, ny=p.y+Math.sin(a)*1.7;
+        cx.strokeStyle=p.a?'rgba(161,148,255,.55)':'rgba(255,107,74,.55)';
+        cx.beginPath(); cx.moveTo(p.x,p.y); cx.lineTo(nx,ny); cx.stroke();
+        p.x=nx; p.y=ny; p.l++;
+        if(p.l>260||nx<0||nx>W||ny<0||ny>H){ p.x=Math.random()*W; p.y=Math.random()*H; p.l=0; }
+      }
+      t+=.004;
+      if(running) raf=requestAnimationFrame(frame);
+    }
+    size();
+    window.addEventListener('resize',function(){ size(); });
+    if(reduce){ for(var i=0;i<140;i++) frame(); return; }
+    if('IntersectionObserver' in window){
+      new IntersectionObserver(function(es){
+        var vis=es[0].isIntersecting;
+        if(vis&&!running){running=true;frame();} else if(!vis){running=false;cancelAnimationFrame(raf);}
+      }).observe(cv);
+    } else { running=true; frame(); }
+  })();
+
+  /* ───── showcase tabs ───── */
+  var SH = [
+    { title:'~/acme-api — claude', cmd:'where do we verify webhook signatures?', steps:[
+      ['dim','● Search(pattern: "verifySignature")'],['dim','  ⎿ Found 4 files'],
+      ['dim','● Read(src/webhooks/stripe.ts)'],['dim','● Read(src/middleware/rawBody.ts)'],
+      ['txt','Signatures are verified in one place: src/webhooks/stripe.ts:27, using the raw request body that rawBody.ts preserves at line 12. The GitHub handler skips verification in test mode only. See webhooks/github.ts:19.']
+    ]},
+    { title:'~/acme-api — claude', cmd:'rename getUser to fetchUser everywhere', steps:[
+      ['dim','● Search(pattern: "getUser\\b")'],['dim','  ⎿ 61 references across 23 files'],
+      ['acc','● Update(src/services/user.ts)'],['del','  - export async function getUser(id: string) {'],['add','  + export async function fetchUser(id: string) {'],
+      ['acc','● Update(src/routes/profile.ts)  + 22 more files'],
+      ['dim','● Bash(npx tsc --noEmit)'],['ok','  ✓ no type errors'],
+      ['txt','Renamed 61 references in 23 files. Types compile. Review the diff, or ask me to adjust anything.']
+    ]},
+    { title:'~/acme-api — claude', cmd:'make the checkout tests pass', steps:[
+      ['dim','● Bash(pnpm test checkout)'],['err','  ✗ applies coupon twice (expected 80, received 64)'],
+      ['acc','● Update(src/checkout/total.ts)'],['add','  + const discount = applyCoupon(subtotal, coupon)  // once'],
+      ['dim','● Bash(pnpm test checkout)'],['err','  ✗ rounds half cents down'],
+      ['acc','● Update(src/checkout/total.ts)'],['add','  + return Math.round(total * 100) / 100'],
+      ['dim','● Bash(pnpm test checkout)'],['ok','  ✓ 31 passed']
+    ]},
+    { title:'~/acme-api — claude', cmd:'commit this and open a PR', steps:[
+      ['dim','● Bash(git diff --staged)'],['dim','● Bash(git log --oneline -5)'],
+      ['acc','● Bash(git commit)'],['ok','  fix(checkout): apply coupon once, round half cents up'],
+      ['dim','● Bash(git push -u origin fix/checkout-total)'],
+      ['acc','● Bash(gh pr create)'],['ok','  ✓ github.com/acme/api/pull/482'],
+      ['txt','PR is open with a summary, a test plan and a note about the rounding change.']
+    ]}
+  ];
+  var tabs=$$('#tabs .tab'), showBody=$('#showBody'), showTitle=$('#showTitle'), showEl=$('#show');
+  var DUR=9000, timer=null, idx=0, stopped=false;
+  function select(i,user){
+    idx=i;
+    tabs.forEach(function(t,n){ t.setAttribute('aria-selected',String(n===i)); t.style.setProperty('--dur',(DUR/1000)+'s'); });
+    showTitle.textContent=SH[i].title;
+    renderStatic(showBody,SH[i],reduce?0:.55);
+    if(user){ stopped=true; showEl.classList.add('paused'); clearTimeout(timer); }
+  }
+  function auto(){
+    clearTimeout(timer);
+    if(stopped||reduce) return;
+    timer=setTimeout(function(){ select((idx+1)%SH.length,false); auto(); },DUR);
+  }
+  tabs.forEach(function(t){ t.addEventListener('click',function(){ select(+t.getAttribute('data-i'),true); }); });
+  select(0,false);
+  /* only start rotating once the showcase is on screen */
+  if('IntersectionObserver' in window){
+    var started=false;
+    new IntersectionObserver(function(es){
+      if(es[0].isIntersecting && !started){ started=true; select(0,false); auto(); }
+    },{threshold:.35}).observe(showEl);
+  } else auto();
+
+  /* ───── checkpoint slider ───── */
+  var CP = [
+    {f:'routes/export.ts',n:1},{f:'lib/csv.ts',n:2},{f:'tests/export.test.ts',n:3},{f:'config/build.ts',n:4,bad:true}
+  ];
+  var notes=['clean working tree','added the export route','csv writer refactored','12 tests written','current state · build is broken'];
+  var rew=$('#rew'), rewFiles=$('#rewFiles'), rewName=$('#rewName'), rewNote=$('#rewNote');
+  CP.forEach(function(c){ var s=document.createElement('span'); s.className='file'+(c.bad?' bad':''); s.textContent=c.f; s.setAttribute('data-n',c.n); rewFiles.appendChild(s); });
+  function rewUpdate(){
+    var v=+rew.value;
+    rewName.textContent = v===0 ? 'session start' : 'checkpoint '+v;
+    rewNote.textContent = notes[v];
+    rew.style.setProperty('--p',(v/4*100)+'%');
+    $$('.file',rewFiles).forEach(function(f){ f.classList.toggle('off',+f.getAttribute('data-n')>v); });
+  }
+  rew.addEventListener('input',rewUpdate); rewUpdate();
+
+  /* ───── permission modes ───── */
+  var MODES = [
+    { d:'It asks before every edit and every command. You approve each change as it happens.',
+      html:function(){return '<div class="st"><span>mode</span><b>default · asks first</b></div>'+
+        '<div class="tl dim">● Claude wants to edit src/api/users.ts</div>'+
+        '<div class="ask"><div class="q">Apply this change to src/api/users.ts?</div><div class="opts"><span class="on">1  Yes</span><span>2  Yes, always</span><span>3  No, tell Claude why</span></div></div>'}},
+    { d:'File edits go through without a prompt. Commands that touch your system still stop and ask.',
+      html:function(){return '<div class="st"><span>mode</span><b>accept edits on</b></div>'+
+        '<div class="tl acc">● Update(src/api/users.ts)</div><div class="tl add">  + validate(input)</div>'+
+        '<div class="tl acc">● Update(src/api/teams.ts)</div><div class="tl add">  + validate(input)</div>'+
+        '<div class="ask"><div class="q">Run <span style="color:var(--coral)">rm -rf dist &amp;&amp; npm run build</span>?</div><div class="opts"><span class="on">1  Yes</span><span>2  No</span></div></div>'}},
+    { d:'Read-only. It explores, thinks and hands you a plan. Nothing changes until you approve it.',
+      html:function(){return '<div class="st"><span>mode</span><b>plan mode · read-only</b></div>'+
+        '<div class="tl dim">● Read(src/api/users.ts)</div><div class="tl dim">● Read(src/api/teams.ts)</div>'+
+        '<div class="tl txt" style="margin-top:14px">Plan</div>'+
+        '<div class="tl">  1. Add a shared validate() helper\n  2. Call it from 6 route handlers\n  3. Cover the empty-body case in tests</div>'+
+        '<div class="ask"><div class="q">Ready to start on this plan?</div><div class="opts"><span class="on">1  Yes, proceed</span><span>2  Keep planning</span></div></div>'}}
+  ];
+  var seg=$$('#seg button'), md=$('#modeDesc'), perm=$('#perm');
+  function setMode(i){
+    seg.forEach(function(b,n){ b.setAttribute('aria-pressed',String(n===i)); });
+    md.textContent=MODES[i].d; perm.innerHTML=MODES[i].html();
+  }
+  seg.forEach(function(b){ b.addEventListener('click',function(){ setMode(+b.getAttribute('data-m')); }); });
+  setMode(0);
+})();
+</script>
+</body>
+</html>
